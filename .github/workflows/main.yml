@@ -1,4 +1,4 @@
-name: Build so3 IPA
+name: Build IPA
 
 on:
   workflow_dispatch:
@@ -10,11 +10,11 @@ on:
       output_name:
         description: 'Имя готового .ipa без расширения'
         required: false
-        default: 'so3'
+        default: 'Standoff2-Gadget'
 
 jobs:
   build-ipa:
-    runs-on: macos-15
+    runs-on: macos-14
     permissions:
       contents: read
     steps:
@@ -23,27 +23,39 @@ jobs:
 
       - name: Build insert_dylib
         run: |
-          HOST="github.com"
-          REPO="tyilo/insert_dylib.git"
-          git clone --depth 1 "https://${HOST}/${REPO}"
+          git clone --depth 1 https://github.com/Tyilo/insert_dylib.git
           clang -O2 -o insert_dylib_bin insert_dylib/insert_dylib/main.c
           chmod +x insert_dylib_bin
-          sudo mkdir -p /usr/local/bin
           sudo mv insert_dylib_bin /usr/local/bin/insert_dylib
-
+          insert_dylib 2>&1 | head -n 2 || true
 
       - name: Obtain source IPA
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release download --pattern '*.ipa' --dir . --clobber --repo "$GITHUB_REPOSITORY"
-          SRC="$(find . -maxdepth 1 -name '*.ipa' -type f | head -n1)"
-          if [ -z "$SRC" ] || [ ! -s "$SRC" ]; then
-            echo "Ошибка: сначала загрузите исходный .ipa в Releases этого репозитория" >&2
+
+          SRC=""
+
+          if compgen -G "input/*.ipa" > /dev/null; then
+            SRC="$(find input -maxdepth 1 -name '*.ipa' -type f | head -n1)"
+            echo "source: repository input/ folder"
+          elif gh release view --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "source: GitHub release asset"
+            gh release download --pattern '*.ipa' --dir . --clobber --repo "$GITHUB_REPOSITORY" || true
+            SRC="$(find . -maxdepth 1 -name '*.ipa' -type f | head -n1)"
+          else
+            echo "::error::No source IPA. Put a decrypted .ipa into the input/ folder of this repository, or publish a Release with an .ipa asset attached." >&2
             exit 1
           fi
+
+          if [ -z "$SRC" ] || [ ! -s "$SRC" ]; then
+            echo "::error::Release exists but has no .ipa asset. Attach one, or put the file into input/." >&2
+            exit 1
+          fi
+
           mv "$SRC" game.ipa
+          ls -lh game.ipa
 
       - name: Build IPA
         run: |
@@ -55,3 +67,4 @@ jobs:
         with:
           name: ${{ github.event.inputs.output_name }}-ipa
           path: ${{ github.event.inputs.output_name }}.ipa
+          if-no-files-found: error
