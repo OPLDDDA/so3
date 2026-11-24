@@ -2,37 +2,53 @@ name: Build so3 IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      gadget_version:
+        description: 'Версия Frida gadget'
+        required: false
+        default: '16.2.2'
+      output_name:
+        description: 'Имя готового .ipa без расширения'
+        required: false
+        default: 'so3'
 
 jobs:
-  build:
+  build-ipa:
     runs-on: macos-15
-
+    permissions:
+      contents: read
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Раскомментируйте две строки ниже, если в репозитории есть project.yml (XcodeGen):
-      # - name: Generate Xcode project
-      #   run: brew install xcodegen && xcodegen generate
-
-      - name: Build App without signing
+      - name: Build insert_dylib
         run: |
-          xcodebuild -project so3.xcodeproj \
-            -scheme so3 \
-            -configuration Release \
-            -sdk iphoneos \
-            CODE_SIGNING_ALLOWED=NO \
-            CONFIGURATION_BUILD_DIR=$RUNNER_TEMP/build
+          git clone --depth 1 https://github.com
+          clang -O2 -o insert_dylib_bin insert_dylib/insert_dylib/main.c
+          chmod +x insert_dylib_bin
+          sudo mkdir -p /usr/local/bin
+          sudo mv insert_dylib_bin /usr/local/bin/insert_dylib
 
-      - name: Package into IPA
+      - name: Obtain source IPA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p $RUNNER_TEMP/Payload
-          cp -r $RUNNER_TEMP/build/*.app $RUNNER_TEMP/Payload/
-          cd $RUNNER_TEMP
-          zip -r so3.ipa Payload
+          set -euo pipefail
+          gh release download --pattern '*.ipa' --dir . --clobber --repo "$GITHUB_REPOSITORY"
+          SRC="$(find . -maxdepth 1 -name '*.ipa' -type f | head -n1)"
+          if [ -z "$SRC" ] || [ ! -s "$SRC" ]; then
+            echo "Ошибка: сначала загрузите исходный .ipa в Releases этого репозитория" >&2
+            exit 1
+          fi
+          mv "$SRC" game.ipa
 
-      - name: Upload IPA Artifact
+      - name: Build IPA
+        run: |
+          bash tools/package-gadget.sh game.ipa "${{ github.event.inputs.gadget_version }}"
+          mv game-gadget.ipa "${{ github.event.inputs.output_name }}.ipa"
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: so3-ipa
-          path: ${{ runner.temp }}/so3.ipa
+          name: ${{ github.event.inputs.output_name }}-ipa
+          path: ${{ github.event.inputs.output_name }}.ipa
