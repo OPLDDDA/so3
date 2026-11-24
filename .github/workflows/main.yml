@@ -1,66 +1,38 @@
-name: Build IPA
+name: Build so3 IPA
 
 on:
   workflow_dispatch:
-    inputs:
-      gadget_version:
-        description: 'Версия Frida gadget'
-        required: false
-        default: '16.2.2'
-      output_name:
-        description: 'Имя готового .ipa без расширения'
-        required: false
-        default: 'Standoff2-Gadget'
 
 jobs:
-  build-ipa:
+  build:
     runs-on: macos-15
-    permissions:
-      contents: read
+
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Build insert_dylib
+      # Раскомментируйте две строки ниже, если в репозитории есть project.yml (XcodeGen):
+      # - name: Generate Xcode project
+      #   run: brew install xcodegen && xcodegen generate
+
+      - name: Build App without signing
         run: |
-          git clone --depth 1 https://github.com/tyilo/insert_dylib.git
-          clang -O2 -o insert_dylib_bin insert_dylib/insert_dylib/main.c
-          chmod +x insert_dylib_bin
-          sudo mkdir -p /usr/local/bin
-          sudo mv insert_dylib_bin /usr/local/bin/insert_dylib
-          insert_dylib 2>&1 | head -n 2 || true
+          xcodebuild -project so3.xcodeproj \
+            -scheme so3 \
+            -configuration Release \
+            -sdk iphoneos \
+            CODE_SIGNING_ALLOWED=NO \
+            CONFIGURATION_BUILD_DIR=$RUNNER_TEMP/build
 
-      - name: Obtain source IPA
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Package into IPA
         run: |
-          set -euo pipefail
+          mkdir -p $RUNNER_TEMP/Payload
+          cp -r $RUNNER_TEMP/build/*.app $RUNNER_TEMP/Payload/
+          cd $RUNNER_TEMP
+          zip -r so3.ipa Payload
 
-          if compgen -G "input/*.ipa" > /dev/null; then
-            SRC="$(find input -maxdepth 1 -name '*.ipa' -type f | head -n1)"
-            echo "source: repository input/ folder"
-          else
-            echo "source: latest GitHub release asset"
-            gh release download --pattern '*.ipa' --dir . --clobber --repo "$GITHUB_REPOSITORY"
-            SRC="$(find . -maxdepth 1 -name '*.ipa' -type f | head -n1)"
-          fi
-
-          if [ -z "$SRC" ] || [ ! -s "$SRC" ]; then
-            echo "no source IPA found" >&2
-            exit 1
-          fi
-
-          mv "$SRC" game.ipa
-          ls -lh game.ipa
-
-      - name: Build IPA
-        run: |
-          bash tools/package-gadget.sh game.ipa "${{ github.event.inputs.gadget_version }}"
-          mv game-gadget.ipa "${{ github.event.inputs.output_name }}.ipa"
-
-      - name: Upload IPA
+      - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.inputs.output_name }}-ipa
-          path: ${{ github.event.inputs.output_name }}.ipa
-          if-no-files-found: error
+          name: so3-ipa
+          path: ${{ runner.temp }}/so3.ipa
