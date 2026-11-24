@@ -1,0 +1,48 @@
+{
+  "bundleId": "com.playtox.standoff2",
+  "esp": {
+    "enabled": true,
+    "boxes": true,
+    "names": true,
+    "health": true,
+    "distance": true,
+    "maxDistance": 120,
+    "enemyColor": "#ff3b5c",
+    "teamColor": "#3bff9e",
+    "fillAlpha": 0.08
+  },
+  "aimbot": {
+    "enabled": true,
+    "bone": "head",
+    "fov": 32,
+    "smooth": 6,
+    "maxDistance": 90,
+    "visibilityCheck": true,
+    "headOffset": 1.55
+  },
+  "triggerbot": {
+    "enabled": false,
+    "delayMs": 45
+  },
+  "radar": {
+    "enabled": true,
+    "size": 210,
+    "range": 55,
+    "opacity": 0.75
+  },
+  "symbols": {
+    "assembly": "Assembly-CSharp",
+    "playerClass": "Player",
+    "playersListMethod": "get_AllPlayers",
+    "localPlayerMethod": "get_LocalPlayer",
+    "transformMethod": "get_Transform",
+    "positionMethod": "get_Position",
+    "healthField": "_health",
+    "teamField": "_teamId",
+    "nameField": "_playerName",
+    "fireMethod": "Fire",
+    "frameClass": "UnityEngine.Camera",
+    "frameMethod": "Update",
+    "frameAssembly": "UnityEngine.CoreModule"
+  }
+}
