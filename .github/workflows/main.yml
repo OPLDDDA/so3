@@ -1,0 +1,41 @@
+name: Build IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Прямая ссылка на расшифрованный Standoff 2 .ipa'
+        required: true
+      gadget_version:
+        description: 'Версия Frida gadget'
+        required: false
+        default: '16.2.2'
+      output_name:
+        description: 'Имя готового .ipa без расширения'
+        required: false
+        default: 'Standoff2-Gadget'
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install insert_dylib
+        run: brew install insert_dylib
+
+      - name: Download source IPA
+        run: curl -fL --retry 3 -o game.ipa "${{ github.event.inputs.ipa_url }}"
+
+      - name: Build IPA
+        run: |
+          bash tools/package-gadget.sh game.ipa "${{ github.event.inputs.gadget_version }}"
+          mv game-gadget.ipa "${{ github.event.inputs.output_name }}.ipa"
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.output_name }}-ipa
+          path: ${{ github.event.inputs.output_name }}.ipa
+          if-no-files-found: error
